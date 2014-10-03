@@ -1,0 +1,32 @@
+dnl configure.in for the eigenvalues of the ERBL evolution kernel
+dnl
+dnl (c) 1997-2002 by W. Schroers
+dnl
+dnl Consult the current version information below
+dnl
+
+dnl
+AC_INIT(AnomDim,8.0,Wolfram.Schroers@Feldtheorie.de)
+AC_CONFIG_SRCDIR([ad_rat.c.in])
+
+dnl Set the information on the current version here
+VERSION=8.0
+
+dnl Active version number substitution
+AC_SUBST(VERSION)
+
+dnl Check for programs
+AC_PROG_CC
+
+dnl Check for libraries
+AC_LANG(C)
+AC_CHECK_LIB(gmp, init)
+
+dnl Check for header files
+AC_HEADER_STDC
+AC_CHECK_HEADERS([float.h gmp.h])
+
+dnl Finalize
+AC_CONFIG_FILES([])
+AC_OUTPUT(Makefile ad_rat.c ad_flt.c)
+

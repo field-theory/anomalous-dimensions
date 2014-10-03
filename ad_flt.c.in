@@ -1,0 +1,312 @@
+#include<stdio.h>
+#include<math.h>
+#include<float.h>
+#include"gmp.h"
+
+
+/*
+	ad_flt.c @VERSION@
+
+	The program ad_flt computes the Eigenvalues of the solutions
+	of the Bethe-Salpeter equation using Appel polynomials as a basis.
+	The operator V is given in the representation of x1^k x3^l.
+
+	Based on work done by M. Bergmann and N. Stefanis
+	(c) 1998-2002 by W. Schroers
+	Published in Phys.Lett.B458:109-116,1999
+
+	For academical use ONLY
+
+        This version makes use of the GMP (Gnu Multiple Precision) Libraries
+	It uses floating point arithmetics for the calculations
+*/
+
+
+/* ***
+	Declare global variables
+   *** */
+
+#define CAMAX 301           /* Maximum value for ca */
+#define KXMAX 603           /* Maximum value for kx */
+#define ACCURACY 800        /* Accuracy in digits */
+mpf_t rr[CAMAX][CAMAX];     /* Appel-polynomials [1..ca,1..ca] */
+mpf_t rb[CAMAX][CAMAX];     /* V in Appel-representation [1..ca,1..ca] */
+mpf_t FacTab[5*KXMAX+1];    /* Tabulated Factorial[i] */
+mpf_t sum22m[2*KXMAX+1];    /* Sum_{j=2}^{i}1/j */
+mpf_t vbl;                  /* Return value of computeV */
+mpf_t rrcache[KXMAX+1][KXMAX+1],tabab[KXMAX+2]; /* Temporary fields */
+
+int kx,okx,z2m,ca; /* Order of Appel polynomials, number of coefficients and
+                      number of Eigenvalues */
+
+int castart,caend; /* Evaluate the Eigenvalues from castart to caend */
+
+
+/* ***
+   z(m,n) is the array index for polynomial coefficient of x1^m x3^n 
+   *** */
+   
+int z2(int k, int l)
+{
+  return k+(kx+1)*(l-1)-l*(l-1)/2;
+}
+
+
+/* ***
+   Initialize the arrays (gmp-numbers must be initialized first)
+   and compute the arrays sum22m and FacTab
+   *** */
+
+void Initialize()
+{
+  int i,j;    /* Loop variables */
+  mpf_t temp; /* Auxiliary variable */
+
+  mpf_set_default_prec(ACCURACY); /* Set the precision of calculations here */
+
+  mpf_init(temp);
+  mpf_init(vbl);
+
+  /* Table with factorials */
+  mpf_init_set_ui(FacTab[1],1);
+  mpf_init_set_ui(FacTab[2],1);
+  for (i=3;i<=5*kx;i++) {
+    mpf_set(temp,FacTab[i-1]);
+    mpf_mul_ui(temp,temp,(i-1));
+    mpf_init_set(FacTab[i],temp);
+  }
+
+  /* Table with sum22m */
+  for (i=1;i<=2*kx;i++) {
+    mpf_init_set_ui(sum22m[i],0);
+    for (j=2;j<=i;j++) {
+      mpf_set_ui(temp,j);
+      mpf_ui_div(temp,1,temp);
+      mpf_add(sum22m[i],sum22m[i],temp);
+    }
+  }
+
+  /* Arrays rr and rb */
+  for (i=1;i<=ca;i++) for (j=1;j<=ca;j++) {
+    mpf_init_set_ui(rr[i][j],0);
+    mpf_init_set_ui(rb[i][j],0);
+  }
+
+  mpf_clear(temp);
+}
+
+
+/* ***
+   Compute V in the Brodsky-Lepage representation 
+   (polynomials of the type x1^k x3^l)
+   Returns the output in vbl
+   *** */
+   
+void computeV(int k, int l, int m, int n)
+{
+  mpf_t temp1,temp2;
+  int j;
+
+  mpf_init(temp1); mpf_init(temp2);
+  mpf_set_d(vbl,0.0);
+
+  if ((m==k)&&(n==l)) {
+    mpf_set_ui(temp1,(k+1)*(k+2));
+    mpf_ui_div(temp1,1,temp1);
+    mpf_set_ui(temp2,(l+1)*(l+2));
+    mpf_ui_div(temp2,1,temp2);
+    mpf_add(vbl,vbl,sum22m[k+1]);
+    mpf_add(vbl,vbl,sum22m[l+1]);
+    mpf_neg(vbl,vbl);
+    mpf_mul_ui(vbl,vbl,3);
+    mpf_add(vbl,vbl,temp1);
+    mpf_add(vbl,vbl,temp2);
+  }
+
+  if ((k>0)&&(m<k)&&(n<=l+k)&&(n>=l)&&(k+l>=m+n)) {
+    mpf_set_ui(temp1,(m+2));
+    mpf_div_ui(temp1,temp1,k+2);
+    mpf_div(temp2,FacTab[k-m],FacTab[n-l+1]);
+    mpf_div(temp2,temp2,FacTab[k+l-m-n+1]);
+    mpf_mul(temp1,temp1,temp2);
+    if (((n-l) % 2)==1) mpf_neg(temp1,temp1);
+    mpf_add(vbl,vbl,temp1);
+  }
+
+  if ((l>0)&&(n<l)&&(m<=k+l)&&(m>=k)&&(k+l>=m+n)) {
+    mpf_set_ui(temp1,(n+2));
+    mpf_div_ui(temp1,temp1,l+2);
+    mpf_div(temp2,FacTab[l-n],FacTab[m-k+1]);
+    mpf_div(temp2,temp2,FacTab[k+l-m-n+1]);
+    mpf_mul(temp1,temp1,temp2);
+    if (((m-k) % 2)==1) mpf_neg(temp1,temp1);
+    mpf_add(vbl,vbl,temp1);
+  }
+
+  if (m-k==l-n) {
+    if ((m<=k+l)&&(n<l)&&(l>0)) for(j=0;j<l-n+1;j++) {
+      mpf_div(temp1,FacTab[l+1],FacTab[j+1]);
+      mpf_div(temp1,temp1,FacTab[n+1]);
+      mpf_div(temp1,temp1,FacTab[l-j-n+1]);
+      mpf_mul(temp1,temp1,sum22m[j+k+1]);
+      if ((j % 2)==1) mpf_neg(temp1,temp1);
+      mpf_sub(vbl,vbl,temp1);
+    }
+    if ((n<=k+l)&&(m<k)&&(k>0)) for(j=0;j<n-l+1;j++) {
+      mpf_div(temp1,FacTab[k+1],FacTab[j+1]);
+      mpf_div(temp1,temp1,FacTab[m+1]);
+      mpf_div(temp1,temp1,FacTab[k-j-m+1]);
+      mpf_mul(temp1,temp1,sum22m[j+l+1]);
+      if ((j % 2)==1) mpf_neg(temp1,temp1);
+      mpf_sub(vbl,vbl,temp1);
+    }
+  }
+  
+  mpf_clear(temp1);
+  mpf_clear(temp2);
+}
+
+
+/* ***
+	Compute the coefficient matrix of Appel polynomials
+   *** */
+   
+void computeAppel()
+{
+  int qp; /* Counter for renumbered polynomials */
+  int a,b,c,c2,d,i,j,k; /* Loop counters */
+  int i1,i2; /* Index variables */
+  int m,n; /* Index variables */
+  mpf_t indep,t1,t2,t3,temp1,temp2; /* Auxilliary variables */
+
+  mpf_init(temp1);
+  mpf_init(temp2);
+  mpf_init(indep);
+  mpf_init(t1);
+  mpf_init(t2);
+  mpf_init(t3);
+
+  for (i=1;i<=kx+1;i++) for (j=1;j<=kx+1;j++) {
+  	mpf_init(rrcache[i][j]);
+  }
+
+  for (a=1;a<kx+2;a++) {
+    mpf_init(tabab[a]);
+  	mpf_mul(temp1,FacTab[a],FacTab[a]);
+  	mpf_mul_ui(temp1,temp1,a);
+  	mpf_ui_div(tabab[a],1,temp1);
+  }
+  	
+  for (qp=1;qp<ca+1;qp++) {
+    printf("qp = %d\n",qp);
+    m = qp-1; n = kx+1-qp;
+    mpf_mul(temp1,FacTab[qp],FacTab[kx+2-qp]);
+    mpf_mul(indep,temp1,FacTab[kx+2]);
+    mpf_div_ui(indep,indep,2);
+    /* Set rrcache to 0 */
+    for (i=1;i<=kx+1;i++) for (j=1;j<=kx+1;j++)
+      mpf_set_ui(rrcache[i][j],0);
+    for (b=0;b<m+1;b++) {
+      mpf_div(temp1,tabab[b+1],FacTab[qp-b]);
+      mpf_mul(t1,indep,temp1);
+      for (a=0;a<n+1;a++) {
+        mpf_div(temp1,tabab[a+1],FacTab[kx+2-qp-a]);
+        mpf_mul(t2,t1,temp1);
+        for (c=0;c<kx-a-b+1;c++) {
+	  mpf_mul_ui(temp1,FacTab[kx-a-b-c+1],kx-a-b+1);
+	  mpf_div(t3,t2,temp1);
+	  if ((a+b+c)%2==1) mpf_neg(t3,t3);
+          for (d=0;d<c+1;d++) {
+            mpf_mul(temp1,FacTab[d+1],FacTab[c-d+1]);
+            mpf_div(temp2,t3,temp1);
+            mpf_add(rrcache[b+c-d+1][a+d+1],rrcache[b+c-d+1][a+d+1],temp2);
+          }
+        }
+      }
+    }
+    /* rrcache -= Transpose(rrcache) */
+    for (a=1;a<=kx+1;a++) for (b=a;b<=kx+1;b++) {
+      mpf_sub(rrcache[a][b],rrcache[a][b],rrcache[b][a]);
+      mpf_neg(rrcache[b][a],rrcache[a][b]);
+    }
+    /* Multiply rrcache with vblcache 
+       and obtain thus the next rows of rr and rb */
+    for (d=1;d<=ca;d++) {
+      for (c=1;c<=ca;c++) for (b=c;b<=kx+1;b++) {
+	computeV(b-1,c-1,d-1,d);
+	mpf_set(temp2,vbl);
+	computeV(c-1,b-1,d-1,d);
+	mpf_sub(temp1,temp2,vbl);
+        mpf_mul(temp1,temp1,rrcache[b][c]);
+        mpf_add(rb[qp][d],rb[qp][d],temp1);
+      }
+      mpf_set(rr[d][qp],rrcache[d][d+1]);
+    }
+  }
+
+  for (i=1;i<=ca;i++) for (j=1;j<=ca;j++) {
+  	mpf_clear(rrcache[i][j]);
+  }
+
+  mpf_clear(temp1);
+  mpf_clear(temp2);
+  mpf_clear(indep);
+  mpf_clear(t1);
+  mpf_clear(t2);
+  mpf_clear(t3); 
+}
+
+
+/* ***
+	Main program
+   *** */
+
+main(int argc,char* argv[])
+{
+  int i,j,iwritten; /* Loop variables */
+  FILE *rrout,*rbout;     /* Output files for rr and rb */
+
+  printf("ad_flt v@VERSION@\nC port (c) 1998-2002 W. Schroers\n\n");
+  printf("Uses the gmp-library\n");
+  printf("Does computation with floating point arithmetics\n\n");
+  
+  if (argc != 6) {
+    printf("ERROR: Please start ad_flt using the following command:\n");
+    printf("ad_flt <kx> <castart> <caend> <rrout> <rbout>\n");
+    exit(1);
+  }
+  sscanf(argv[1],"%d",&kx);
+  sscanf(argv[2],"%d",&castart);
+  sscanf(argv[3],"%d",&caend);
+
+  okx = (kx+1)*(kx+2)/2;
+  ca  = (kx+1)/2;
+  z2m = (ca*(3-ca+2*kx))/2;
+  printf("\nInitializing calculation using:\n");
+  printf("kx   = %d\nokx  = %d\nca   = %d\nz2m  = %d\n",kx,okx,ca,z2m);
+  printf("Calculating from ca = %d to ca = %d.\n",castart,caend);
+  if ((castart<1)||(castart>caend)||(caend>ca)) {
+    printf("ERROR: Please make sure that 1 <= <castart> <= <caend> <= <ca>!\n");
+    exit(1);
+  }
+
+  Initialize(); /* Compute FacTab and sum22m and init all variables */
+  computeAppel();
+  
+  rrout = fopen(argv[4],"w");
+  for (i=castart;i<=caend;i++) for (j=1;j<=ca;j++) {
+    iwritten = mpf_out_str(rrout,0,0,rr[j][i]);
+    fprintf(rrout,"\n");
+  }
+  fclose(rrout);
+
+  rbout = fopen(argv[5],"w");
+  for (i=castart;i<=caend;i++) for (j=1;j<=ca;j++) {
+    iwritten = mpf_out_str(rbout,0,0,rb[i][j]);
+    fprintf(rbout,"\n");
+  }
+  fclose(rbout);
+
+  printf("Please note: Output of rr in transposed form!\n\n");
+  printf("\nComputation complete!\n");
+}

@@ -1,0 +1,57 @@
+#!/bin/sh
+#
+# Makefile for the ad_rat/ad_flt programs
+#
+# (c) 1997-2002 by W. Schroers
+# Version @VERSION@
+#
+# Program independant settings
+SHELL        = /bin/sh
+
+# Explicit version information
+VERSION      = @VERSION@
+
+# Makefile usages
+.PHONY:      all install uninstall clean mrproper allclean
+.SUFFIXES    =
+.SUFFIXES    = .c .o
+.SILENT:
+
+# Compiler configuration
+CFLAGS       = $(DEFINES) @CFLAGS@
+CC           = @CC@
+PREFIX       = @prefix@
+EPREFIX      = @exec_prefix@
+INCLUDEDIR   = $(PREFIX)@includedir@
+LIBDIR       = $(EPREFIX)@libdir@
+
+# Library files
+INCLUDES     = 
+SRCS         = ad_flt.c ad_rat.c
+LIBS         = -lgmp
+TARGETS      = ad_flt ad_rat
+
+# Makefile commands
+install: all
+	echo "The ad_flt and ad_rat programs are ready for use!"
+
+all: $(TARGETS)
+
+uninstall: mrproper
+
+clean:
+	echo -n "Cleaning up the distribution ..."
+	\$(RM) $(OBJS)
+	echo " done!"
+
+mrproper: clean
+	echo -n "Restoring the distribution ..."
+	\$(RM) $(TARGETS) config.cache config.log config.status Makefile $(SRCS)
+	echo " done!"
+
+# Generic rules
+% : %.c
+	echo -n "Compiling the $@ program ..."
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+	echo " done!"
+

@@ -1,0 +1,353 @@
+#include<stdio.h>
+#include<math.h>
+#include<float.h>
+#include"gmp.h"
+
+
+/*
+	ad_rat.c @VERSION@
+
+	The program ad_rat computes the Eigenvalues of the solutions
+	of the Bethe-Salpeter equation using Appel polynomials as a basis.
+	The operator V is given in the representation of x1^k x3^l.
+
+	Based on work done by M. Bergmann and N. Stefanis
+	(c) 1997-2002 by W. Schroers
+	Published in Phys.Lett.B458:109-116,1999
+
+	For academical use ONLY
+
+        This version makes use of the GMP (Gnu Multiple Precision) Libraries
+	It uses rational arithmetics for the calculations
+*/
+
+
+/* ***
+	Declare global variables
+   *** */
+
+#define camax 301           /* Maximum value for ca */
+#define kxmax 602           /* Maximum value for kx */
+#define accuracy 2000       /* Accuracy in digits */
+mpq_t rr[camax][camax];     /* Appel-polynomials [1..ca,1..ca] */
+mpq_t rb[camax][camax];     /* V in Appel-representation [1..ca,1..ca] */
+mpz_t FacTab[5*kxmax+1];    /* Tabulated Factorial[i] */
+mpq_t sum22m[2*kxmax+1];    /* Sum_{j=2}^{i}1/j */
+mpq_t vbl;                  /* Return value of computeV */
+mpz_t inv_tabab[kxmax+2];   /* Temporary fields */
+mpq_t rrcache[kxmax+1][kxmax+1];
+mpq_t temp1,temp2;          /* Temporary rational variables */
+mpz_t ztemp1,ztemp2;        /* Temporary integer variables */
+mpq_t factor3;              /* Some useful constants */
+
+int kx,okx,z2m,ca; /* Order of Appel polynomials, number of coefficients and
+                      number of Eigenvalues */
+
+int castart,caend; /* Evaluate the Eigenvalues from castart to caend */
+
+
+/* ***
+   z(m,n) is the array index for polynomial coefficient of x1^m x3^n 
+*** */
+
+int z2(int k, int l)
+{
+  return k+(kx+1)*(l-1)-l*(l-1)/2;
+}
+
+
+/* ***
+   Initialize the arrays (gmp-numbers must be initialized first)
+   and compute the arrays sum22m and FacTab
+   *** */
+
+void Initialize()
+{
+  int i,j;      /* Loop variables */
+  mpq_t tempq;  /* Auxiliary variable */
+  mpz_t tempz;
+
+  mpq_init(tempq);
+  mpz_init(tempz);
+  mpq_init(vbl);
+  mpq_init(temp1);  mpq_init(temp2);
+  mpz_init(ztemp1); mpz_init(ztemp2);
+  mpq_init(factor3); mpq_set_ui(factor3,3,1);
+
+  /* Table with factorials */
+  mpz_init_set_ui(FacTab[1],1);
+  mpz_init_set_ui(FacTab[2],1);
+  for (i=3;i<=5*kx;i++) {
+    mpz_set(tempz,FacTab[i-1]);
+    mpz_mul_ui(tempz,tempz,(i-1));
+    mpz_init_set(FacTab[i],tempz);
+  }
+
+  /* Table with sum22m */
+  for (i=1;i<=2*kx;i++) {
+    mpq_init(sum22m[i]);
+    mpq_set_ui(sum22m[i],0,1);
+    for (j=2;j<=i;j++) {
+      mpq_set_ui(tempq,1,j);
+      mpq_add(sum22m[i],sum22m[i],tempq);
+    }
+  }
+
+  /* Arrays rr and rb */
+  for (i=1;i<=ca;i++) for (j=1;j<=ca;j++) {
+    mpq_init(rr[i][j]); 
+    mpq_set_ui(rr[i][j],0,1);
+    mpq_init(rb[i][j]); 
+    mpq_set_ui(rb[i][j],0,1);
+  }
+
+  mpq_clear(tempq);
+  mpz_clear(tempz);
+}
+
+
+/* ***
+   Compute V in the Brodsky-Lepage representation 
+   (polynomials of the type x1^k x3^l)
+   Returns the output in vbl
+   *** */
+
+void computeV(int k, int l, int m, int n)
+{
+  int j;
+
+  mpq_set_ui(vbl,0,1);
+
+  if ((m==k)&&(n==l)) {
+    mpq_set_ui(temp1,1,(k+1)*(k+2));
+    mpq_set_ui(temp2,1,(l+1)*(l+2));
+    mpq_canonicalize(temp1); mpq_canonicalize(temp2);
+    mpq_add(vbl,vbl,sum22m[k+1]);
+    mpq_add(vbl,vbl,sum22m[l+1]);
+    mpq_neg(vbl,vbl);
+    mpq_mul(vbl,vbl,factor3);
+    mpq_add(vbl,vbl,temp1);
+    mpq_add(vbl,vbl,temp2);
+  }
+
+  if ((k>0)&&(m<k)&&(n<=l+k)&&(n>=l)&&(k+l>=m+n)) {
+    mpz_mul(ztemp1,FacTab[n-l+1],FacTab[k+l-m-n+1]);
+    mpq_set_z(temp2,FacTab[k-m]);
+    mpq_set_z(temp1,ztemp1);
+    mpq_div(temp2,temp2,temp1);
+    mpq_set_ui(temp1,(m+2),(k+2));
+    mpq_canonicalize(temp1);
+    mpq_mul(temp1,temp1,temp2);
+    if (((n-l) % 2)==1) mpq_neg(temp1,temp1);
+    mpq_add(vbl,vbl,temp1);
+  }
+
+  if ((l>0)&&(n<l)&&(m<=k+l)&&(m>=k)&&(k+l>=m+n)) {
+    mpz_mul(ztemp1,FacTab[m-k+1],FacTab[k+l-m-n+1]);
+    mpq_set_z(temp2,FacTab[l-n]);
+    mpq_set_z(temp1,ztemp1);
+    mpq_div(temp2,temp2,temp1);
+    mpq_set_ui(temp1,(n+2),(l+2));
+    mpq_canonicalize(temp1);
+    mpq_mul(temp1,temp1,temp2);
+    if (((m-k) % 2)==1) mpq_neg(temp1,temp1);
+    mpq_add(vbl,vbl,temp1);
+  }
+
+  if (m-k==l-n) {
+    if ((m<=k+l)&&(n<l)&&(l>0)) for(j=0;j<l-n+1;j++) {
+      mpq_set_z(temp1,FacTab[n+1]);
+      mpq_set_z(temp2,FacTab[l-j-n+1]);
+      mpq_mul(temp1,temp1,temp2);
+      mpq_set_z(temp2,FacTab[j+1]);
+      mpq_mul(temp1,temp1,temp2);
+      mpq_set_z(temp2,FacTab[l+1]);
+      mpq_div(temp1,temp2,temp1);
+      mpq_mul(temp1,temp1,sum22m[j+k+1]);
+      if ((j % 2)==1) mpq_neg(temp1,temp1);
+      mpq_sub(vbl,vbl,temp1);
+    }
+    if ((n<=k+l)&&(m<k)&&(k>0)) for(j=0;j<n-l+1;j++) {
+      mpq_set_z(temp1,FacTab[m+1]);
+      mpq_set_z(temp2,FacTab[k-j-m+1]);
+      mpq_mul(temp1,temp1,temp2);
+      mpq_set_z(temp2,FacTab[j+1]);
+      mpq_mul(temp1,temp1,temp2);
+      mpq_set_z(temp2,FacTab[k+1]);
+      mpq_div(temp1,temp2,temp1);
+      mpq_mul(temp1,temp1,sum22m[j+l+1]);
+      if ((j % 2)==1) mpq_neg(temp1,temp1);
+      mpq_sub(vbl,vbl,temp1);
+    }
+  }
+}
+
+
+/* ***
+	Compute the coefficient matrix of Appel polynomials
+   *** */
+
+void computeAppel()
+{
+  int qp;               /* Counter for renumbered polynomials */
+  int a,b,c,c2,d,i,j,k; /* Loop counters */
+  int i1,i2;            /* Index variables */
+  int m,n;              /* Index variables */
+  mpq_t indep,t1,t2,t3; /* Auxilliary variables */
+
+  mpq_init(indep);
+  mpq_init(t1);
+  mpq_init(t2);
+  mpq_init(t3);
+
+  for (a=1;a<=kx+1;a++) for (b=1;b<=kx+1;b++)
+    mpq_init(rrcache[a][b]);
+
+  for (a=1;a<kx+2;a++) {
+    mpz_mul(ztemp1,FacTab[a],FacTab[a]);
+    mpz_mul_ui(ztemp1,ztemp1,a);
+    mpz_init_set(inv_tabab[a],ztemp1);
+  }
+  	
+  for (qp=castart;qp<caend+1;qp++) {
+    printf("qp = %d\n",qp);
+    m = qp-1; n = kx+1-qp;
+
+    mpz_mul(ztemp1,FacTab[qp],FacTab[kx+2-qp]);
+    mpz_mul(ztemp2,ztemp1,FacTab[kx+2]);
+    mpq_set_z(indep,ztemp2);
+    mpq_get_den(ztemp1,indep);
+    mpz_mul_ui(ztemp1,ztemp1,2);
+    mpq_set_den(indep,ztemp1);
+    mpq_canonicalize(indep);
+    /* Set rrcache to 0 */
+    for (i=1;i<=kx+1;i++) for (j=1;j<=kx+1;j++)
+      mpq_set_ui(rrcache[i][j],0,1);
+
+    for (b=0;b<m+1;b++) {
+      mpq_get_num(ztemp1,indep);
+      mpq_get_den(ztemp2,indep);
+      mpz_mul(ztemp2,ztemp2,inv_tabab[b+1]);
+      mpz_mul(ztemp2,ztemp2,FacTab[qp-b]);
+      mpq_set_num(t1,ztemp1);
+      mpq_set_den(t1,ztemp2);
+      mpq_canonicalize(t1);
+      for (a=0;a<n+1;a++) {
+	mpq_get_num(ztemp1,t1);
+	mpq_get_den(ztemp2,t1);
+	mpz_mul(ztemp2,ztemp2,inv_tabab[a+1]);
+	mpz_mul(ztemp2,ztemp2,FacTab[kx+2-qp-a]);
+	mpq_set_num(t2,ztemp1);
+	mpq_set_den(t2,ztemp2);
+	mpq_canonicalize(t2);
+        for (c=0;c<kx-a-b+1;c++) {
+	  mpz_mul_ui(ztemp1,FacTab[kx-a-b-c+1],kx-a-b+1);
+	  mpq_get_den(ztemp2,t2);
+	  mpz_mul(ztemp2,ztemp2,ztemp1);
+	  mpq_set_den(t3,ztemp2);
+	  mpq_get_num(ztemp1,t2);
+	  mpq_set_num(t3,ztemp1);
+	  mpq_canonicalize(t3);
+	  if ((a+b+c)%2==1) mpq_neg(t3,t3);
+          for (d=0;d<c+1;d++) {
+	    mpz_mul(ztemp1,FacTab[d+1],FacTab[c-d+1]);
+	    mpq_set_z(temp1,ztemp1);
+	    mpq_div(temp1,t3,temp1);
+	    mpq_add(rrcache[b+c-d+1][a+d+1],rrcache[b+c-d+1][a+d+1],temp1);
+          }
+        }
+      }
+    }
+    /* rrcache -= Transpose(rrcache) */
+    for (a=1;a<=kx+1;a++) for (b=a;b<=kx+1;b++) {
+      mpq_sub(rrcache[a][b],rrcache[a][b],rrcache[b][a]);
+      mpq_neg(rrcache[b][a],rrcache[a][b]);
+    }
+    /* Multiply rrcache with vblcache 
+       and obtain thus the next rows of rr and rb */
+    for (d=1;d<=ca;d++) {
+      for (c=1;c<=ca;c++) for (b=c;b<=kx+1;b++) {
+	computeV(b-1,c-1,d-1,d);
+	mpq_set(t2,vbl);
+	computeV(c-1,b-1,d-1,d);
+	mpq_sub(temp1,t2,vbl);
+        mpq_mul(temp1,temp1,rrcache[b][c]);
+        mpq_add(rb[qp][d],rb[qp][d],temp1);
+      }
+      mpq_set(rr[d][qp],rrcache[d][d+1]);
+    }
+  }
+
+  for (i=1;i<=ca;i++) for (j=1;j<=ca;j++)
+    mpq_clear(rrcache[i][j]);
+
+  mpq_clear(indep);
+  mpq_clear(t1);
+  mpq_clear(t2);
+  mpq_clear(t3);
+}
+
+
+/* ***
+	Main program
+	Program must be invoked using
+	as2 <kx> <castart> <caend> <rrout> <rbout>
+   *** */
+
+main(int argc,char* argv[])
+{
+  int i,j,iwritten;     /* Loop variables */
+  FILE *rrout,*rbout;     /* Output files for rr and rb */
+
+  printf("ad_rat v@VERSION@\nC port (c) 1997-2002 W. Schroers\n\n");
+  printf("Uses the gmp-library\n");
+  printf("Does computation with rational number arithmetics\n\n");
+  
+  if (argc != 6) {
+    printf("ERROR: Please start ad_rat using the following command:\n");
+    printf("ad_rat <kx> <castart> <caend> <rrout> <rbout>\n");
+    exit(1);
+  }
+  sscanf(argv[1],"%d",&kx);
+  sscanf(argv[2],"%d",&castart);
+  sscanf(argv[3],"%d",&caend);
+
+  okx = (kx+1)*(kx+2)/2;
+  ca  = (kx+1)/2;
+  z2m = (ca*(3-ca+2*kx))/2;
+  printf("\nInitializing calculation using:\n");
+  printf("kx   = %d\nokx  = %d\nca   = %d\nz2m  = %d\n",kx,okx,ca,z2m);
+  printf("Calculating from ca = %d to ca = %d.\n",castart,caend);
+  if ((castart<1)||(castart>caend)||(caend>ca)) {
+    printf("ERROR: Please make sure that 1 <= <castart> <= <caend> <= <ca>!\n");
+    exit(1);
+  }
+
+  Initialize(); /* Compute FacTab and sum22m and init all variables */
+  computeAppel();
+  
+  rrout = fopen(argv[4],"w");
+  for (i=castart;i<=caend;i++) for (j=1;j<=ca;j++) {
+    mpq_get_num(ztemp1,rr[j][i]);
+    mpq_get_den(ztemp2,rr[j][i]);
+    iwritten = mpz_out_str(rrout,10,ztemp1);
+    fprintf(rrout,"/");
+    iwritten = mpz_out_str(rrout,10,ztemp2);
+    fprintf(rrout,"\n");
+  }
+  fclose(rrout);
+
+  rbout = fopen(argv[5],"w");
+  for (i=castart;i<=caend;i++) for (j=1;j<=ca;j++) {
+    mpq_get_num(ztemp1,rb[i][j]);
+    mpq_get_den(ztemp2,rb[i][j]);
+    iwritten = mpz_out_str(rbout,10,ztemp1);
+    fprintf(rbout,"/");
+    iwritten = mpz_out_str(rbout,10,ztemp2);
+    fprintf(rbout,"\n");
+  }
+  fclose(rbout);
+
+  printf("Please note: Output of rr in transposed form!\n\n");
+  printf("\nComputation complete!\n");
+}
