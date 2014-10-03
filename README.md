@@ -15,6 +15,13 @@ The program has been tested on different Linux distributions with and Solaris sy
     ./configure
     make
 
+If the GMP library is at a non-standard location, the appropriate flags can be added in the following manner (this is an example for GMP installed by [Fink](http://finkproject.org) on MacOS X):
+
+    CFLAGS="-I/sw/include -L/sw/lib" ./configure
+    CFLAGS="-I/sw/include -L/sw/lib" make
+
+This will create the two executable files `ad_rat` and `ad_flt` which perform the calculation using exact arithmetics with rational polynomials and approximate arithmetics using high-precision floating point numbers, respectively.
+
 Usage
 -----
 
@@ -28,8 +35,8 @@ There are two different implementations of the algorithm: The first uses exact a
 
 We will demonstrate the different possibilities by an example: Compute the anomalous dimensions for the order `N=5`. The entire analysis with the rational numbers version will look as follows:
 
-    % ad_rat 5 1 3 rr.out rb.out
-    % math < Diagon_rat.m
+    ./ad_rat 5 1 3 rr.out rb.out
+    math < Diagon_rat.m
 
 The last line of the output from Mathematica will then contain the requested numbers:
 
@@ -38,19 +45,19 @@ The last line of the output from Mathematica will then contain the requested num
 
 Using the floating point version is quite analogous
 
-    % ad_flt 5 1 3 rr.out rb.out
-    % math < Diagon_flt.m
+    ./ad_flt 5 1 3 rr.out rb.out
+    math < Diagon_flt.m
 
-The `ad_rat/ad_flt` programs have the following input parameters: The first is the order `N`, the second the starting row and the third the final row. The name of the output file containing the matrix is given by the fourth, and the solution vector by the fifth parameter.
+The `ad_rat`/`ad_flt` programs have the following input parameters: The first is the order `N`, the second the starting row and the third the final row. The name of the output file containing the matrix is given by the fourth, and the solution vector by the fifth parameter.
 
 By appropriate choices of the starting and final row, it is possible, to parallelize the program. We demonstrate this in the case of the `ad_flt` program:
 
-    % ad_flt 5 1 1 rr1 rb1
-    % ad_flt 5 2 2 rr2 rb2
-    % ad_flt 5 3 3 rr3 rb3
-    % cat rr1 rr2 rr3 > rr.out
-    % cat rb1 rb2 rb3 > rb.out
-    % math < Diagon_flt.m
+    ./ad_flt 5 1 1 rr1 rb1
+    ./ad_flt 5 2 2 rr2 rb2
+    ./ad_flt 5 3 3 rr3 rb3
+    cat rr1 rr2 rr3 > rr.out
+    cat rb1 rb2 rb3 > rb.out
+    math < Diagon_flt.m
 
 This is useful if the individual jobs can be run on different machines. However, there is no automated control of the program flow and output files. Thus, for larger projects, it is advisable to use script files to avoid typing errors.
 
