@@ -1,4 +1,4 @@
-anomalous-dimensions [![development status](http://img.shields.io/badge/status-final--release-green.svg)](http://www.sciencedirect.com/science/article/pii/S0370269399005523)
+anomalous-dimensions [![development status](http://img.shields.io/badge/status-final--release-green.svg)](http://www.sciencedirect.com/science/article/pii/S0370269399005523) [![version](http://img.shields.io/badge/version-8.0-lightgrey.svg)](http://www.field-theory.org) [![platform](http://img.shields.io/badge/platform-linux%7Csolaris%7Cmacos-lightgrey.svg](http://www.field-theory.org)
 ====================
 
 Scientific software for computing the large order trend of the anomalous dimensions spectrum of trilinear twist - three quark operators. This software has been used for the paper reported in
