@@ -1,4 +1,4 @@
-anomalous-dimensions
+anomalous-dimensions [![development status](http://img.shields.io/badge/status-final--release-green.svg)](http://www.sciencedirect.com/science/article/pii/S0370269399005523)
 ====================
 
 Scientific software for computing the large order trend of the anomalous dimensions spectrum of trilinear twist - three quark operators. This software has been used for the paper reported in
